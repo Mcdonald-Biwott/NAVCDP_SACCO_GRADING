@@ -1,0 +1,645 @@
+rm(list = ls(all = TRUE))
+graphics.off()
+shell("cls")
+
+library(readxl)
+library(tidyverse)
+library(janitor)
+library(dplyr)
+library(lubridate)
+
+# Read data
+setwd("D:/NAVCDP SACCO_FPO MAPPING/NAVCDP SACCO GRADING")
+data <- read_excel("SACCO_FPO_Form_for_Kiambu_County.xlsx")
+data<-clean_names(data)
+data <-  filter(data, organization_type == "SACCO")
+
+###Ward Coverage
+data <- data %>% 
+  rowwise() %>% 
+  mutate(wardcoverage = sum(c_across(b5_a_ward_coverage_oldonyiro:b5_a_ward_coverage_siana)))
+
+data |> pull(wardcoverage ) |>unique()
+
+#years
+data <- data %>%
+  mutate(BackgroundInd1 = ifelse(operations_years_of_existance ==0, 0,
+                                ifelse(operations_years_of_existance > 0 & operations_years_of_existance <3,1,
+                                       ifelse(operations_years_of_existance >= 3 & operations_years_of_existance <5,2,
+                                              ifelse(operations_years_of_existance>= 5,3,NA)))))
+data <- data %>%
+  mutate(BackgroundInd1= ifelse(is.na(BackgroundInd1), 0, BackgroundInd1))
+data |> pull(BackgroundInd1 ) |>unique()
+
+#common Bond
+names(data) = gsub(pattern = "*a3_what_is_the_common_bond_between_members_of_the_org_type_name_", replacement = "", x = names(data))
+
+
+data <- data %>%
+  mutate(BackgroudBond2 = ifelse(interest_in_real_estate_and_housing + interest_in_the_transport_sector > 1 &
+                                   agricultural_production + fisheries+livestock_production+
+                                   marketing ==0,1,
+                                 ifelse(agricultural_production + marketing == 1,1.5,
+                                        ifelse(agricultural_production + marketing ==2,3,
+                                               ifelse(agricultural_production +                                                                                                                                                                                       
+                                                        common_employer+                                                                                                                                                                                                  
+                                                        fisheries +                                                                                                                                                                                                       
+                                                        interest_in_real_estate_and_housing+                                                                                                                                                                             
+                                                        interest_in_the_transport_sector+                                                                                                                                                                                
+                                                        livestock_production +                                                                                                                                                                                            
+                                                        marketing +                                                                                                                                                                                                      
+                                                        same_locality +                                                                                                                                                                                                  
+                                                        shared_economic_interest+                                                                                                                                                                                         
+                                                        shared_faith==0,0,
+                                                      2)))))
+
+data |> pull (BackgroudBond2) |> unique()
+
+# 3) Activities 
+names(data) = gsub(pattern = "*a4_which_of_the_following_is_true_of_this_org_type_name_", replacement = "", x = names(data))
+data <- data %>%
+  mutate(Activities = members_are_saving +members_are_borrowing + marketing_activities_are_undertaken)
+data<- data |> mutate(Activities3 = ifelse(Activities==0,0,
+                                           ifelse(Activities==1,1,
+                                                  ifelse(Activities==2,2,
+                                                         ifelse(Activities==3,3,NA)))))
+data|> pull(Activities3)|>unique()
+
+#Membership Status 
+data <- data %>%
+  mutate(MembershipTotal4 = ifelse(b1_a_org_type_name_membership <=200,1,
+                                   ifelse(b1_a_org_type_name_membership >200 & b1_a_org_type_name_membership <500,2,
+                                          ifelse(b1_a_org_type_name_membership >=500,3,NA))))
+
+
+data|> pull(MembershipTotal4)|>unique()
+#5) Gender Disaggregation 
+
+#convert NA to Zero
+data <- data %>%
+  mutate(b2_c_female_membership = ifelse(is.na(b2_c_female_membership), 0, b2_c_female_membership))
+data <- data %>%
+  mutate(b2_b_male_membership = ifelse(is.na(b2_b_male_membership), 0, b2_b_male_membership))
+
+data <- data %>%
+  mutate(GenderDissa5 = ifelse(b2_b_male_membership <1/3*(b1_a_org_type_name_membership) |
+                                 b2_c_female_membership <1/3*(b1_a_org_type_name_membership) ,1,
+                               ifelse(b2_b_male_membership >=1/3*(b1_a_org_type_name_membership) &
+                                        b2_c_female_membership >=1/3*(b1_a_org_type_name_membership),3,0
+                               )))
+
+data |> pull (GenderDissa5) |> unique()
+#Youth Membership
+data <- data %>%
+  mutate(b3_a_male_youth_membership = ifelse(is.na(b3_a_male_youth_membership), 0, b3_a_male_youth_membership))
+data <- data %>%
+  mutate(b3_b_female_youth_membership = ifelse(is.na(b3_b_female_youth_membership), 0, b3_b_female_youth_membership))
+data <- data %>%
+  mutate(Youths = b3_a_male_youth_membership + b3_b_female_youth_membership)
+data <- data %>%
+  mutate(Youths_percent = (Youths/b1_a_org_type_name_membership)*100)        
+
+data <- data %>%
+  mutate(YouthsInd6 = ifelse(Youths_percent ==0,0,
+                             ifelse(Youths_percent >=1 &Youths_percent <=10,1,
+                                    ifelse(Youths_percent >10 & Youths_percent <=15,2,
+                                           ifelse(Youths_percent >15,3,
+                                                  0))))) |>
+  mutate(YouthsInd6= ifelse(b1_a_org_type_name_membership ==0,0,YouthsInd6 ))
+data <-data |> mutate(YouthsInd6= ifelse(is.na(YouthsInd6),0,YouthsInd6))
+
+
+data|> pull(YouthsInd6)|> unique()
+
+
+#7) No of CIG/VMGs federated  
+
+data<-data|> mutate (CIG_VMG =b4_a_no_of_ci_gs_federated_to_the_org_type_name +
+                       b4_c_no_of_vm_gs_federated_to_the_org_type_name)
+
+data <- data %>%
+  mutate(CIG.VMGInd7 = ifelse(CIG_VMG ==0,0,
+                              ifelse(CIG_VMG %in% 1:19,1,
+                                     ifelse(CIG_VMG %in% 20:50,2,
+                                            ifelse(CIG_VMG >=51,3,
+                                                   0)))))
+
+
+data|> pull(CIG.VMGInd7)|> unique()
+
+
+#8) Average number of CIGs/VMGs members who have joined the SACCO
+data<-data|> rowwise()|> mutate (CIG_VMG_members =sum(b4_b_cig_members ,
+                                                      b4_d_vmg_members,na.rm = T)) |>
+  mutate(AverageCIG_VMG= CIG_VMG_members/CIG_VMG) |>
+  mutate(AverageCIG_VMG =ifelse(is.na(AverageCIG_VMG), 0, AverageCIG_VMG))
+
+
+data <- data %>%
+  mutate(CIG_VMGInd8 = ifelse(AverageCIG_VMG ==0,0,
+                              ifelse(AverageCIG_VMG %in% 1:9,1,
+                                     ifelse(AverageCIG_VMG %in% 10:24,2,
+                                            ifelse(AverageCIG_VMG >=25,3,
+                                                   0)))))
+
+data|>pull(CIG_VMGInd8) |> unique()
+
+
+#GOVERNANCE
+
+data <- data |> mutate(c2_a_male_members =ifelse(is.na(c2_a_male_members), 0, c2_a_male_members))
+data <- data |> mutate(c2_b_female_members =ifelse(is.na(c2_b_female_members), 0, c2_b_female_members))
+
+data <- data %>%
+  mutate(GenderMCM10 = ifelse(c2_a_male_members <1/3*(c1_what_is_the_number_of_management_committee_members) |
+                                c2_b_female_members <1/3*(c1_what_is_the_number_of_management_committee_members) ,1,
+                              ifelse(c2_a_male_members >1/3*(c1_what_is_the_number_of_management_committee_members) &
+                                       c2_b_female_members >1/3*(c1_what_is_the_number_of_management_committee_members),3,1)))
+
+data|>pull(GenderMCM10) |> unique()
+
+
+
+#(10)  % membership of Youth in MC 
+
+data <- data %>%
+  mutate(Youths_percentMCM = (c2_c_youth/c1_what_is_the_number_of_management_committee_members)*100)        
+
+data <- data %>%
+  mutate(YouthsInd10 = ifelse(Youths_percentMCM ==0,0,
+                              ifelse(Youths_percentMCM >=1 &Youths_percentMCM <=10,1,
+                                     ifelse(Youths_percentMCM >10 & Youths_percentMCM <=20,2,
+                                            ifelse(Youths_percentMCM >20,3,
+                                                   0))))) |>
+  mutate(YouthsInd10= ifelse(c2_c_youth ==0,0,YouthsInd10 )) |>
+  mutate(YouthsInd10 =ifelse(is.na(YouthsInd10), 0, YouthsInd10)) 
+
+data|>pull(YouthsInd10) |> unique()
+
+
+#(11)   Gender Disaggregation in Supervisory  Committee ( SC)
+data <- data |> mutate(c2_a_male_members =ifelse(is.na(c2_a_male_members), 0, c2_a_male_members))
+data <- data |> mutate(c2_b_female_members =ifelse(is.na(c2_b_female_members), 0, c2_b_female_members))
+
+data <- data %>%
+  mutate(GenderSC11 = ifelse(c4_a_out_of_the_governance_supervisory_committee_total_members_how_many_are_male <1/3*(c3_how_many_members_are_there_in_the_supervisory_committee_saic) |
+                               c4_b_out_of_the_governance_supervisory_committee_total_members_how_many_are_female <1/3*(c3_how_many_members_are_there_in_the_supervisory_committee_saic) ,1,
+                             ifelse(c4_a_out_of_the_governance_supervisory_committee_total_members_how_many_are_male >=1/3*(c3_how_many_members_are_there_in_the_supervisory_committee_saic) &
+                                      c4_b_out_of_the_governance_supervisory_committee_total_members_how_many_are_female >=1/3*(c3_how_many_members_are_there_in_the_supervisory_committee_saic),3,NA)))|>
+  mutate(GenderSC11 =ifelse(is.na(GenderSC11), 0, GenderSC11))
+
+data<- data|> mutate(GenderSC11= ifelse(c3_how_many_members_are_there_in_the_supervisory_committee_saic ==0,0,GenderSC11 ))
+data|>pull(GenderSC11) |> unique()
+
+
+#(12)  Membership of Youth in SC 
+data$c4_b_out_of_the_governance_supervisory_committee_total_members_how_many_are_youth <-as.numeric(data$c4_b_out_of_the_governance_supervisory_committee_total_members_how_many_are_youth)
+data <- data %>%
+  mutate(Youths_percentSC = (c4_b_out_of_the_governance_supervisory_committee_total_members_how_many_are_youth/
+                               c3_how_many_members_are_there_in_the_supervisory_committee_saic)*100)        
+
+data <- data %>%
+  mutate(YouthsInd12 = ifelse(Youths_percentSC ==0,0,
+                              ifelse(Youths_percentSC >=1 ,3,NA
+                              ))) |>
+  mutate(YouthsInd12 =ifelse(is.na(YouthsInd12), 0, YouthsInd12))
+
+data|>pull(YouthsInd12) |> unique()
+
+
+# 13)  Sub Committees 
+data<- data |> rowwise() |> mutate(SumSubcommitees= sum(c5_sub_committees_executive_finance_administration,
+                                                        c5_sub_committees_credit,
+                                                        c5_sub_committees_education_training,na.rm = T))
+
+
+data<- data |> mutate(SubcommiteesInd13 = ifelse(SumSubcommitees==0,0,
+                                                 ifelse(SumSubcommitees==1,1,
+                                                        ifelse(SumSubcommitees==2,2,
+                                                               ifelse(SumSubcommitees==3,3,NA)))))
+
+
+data|>pull(SubcommiteesInd13) |> unique()
+
+#(14)  Annual General meetings
+data <- data |>
+  mutate(days_agm = as.Date(today) - as.Date(c6_b_general_meeting_date)) |>
+  mutate (days_agm= as.numeric(days_agm))
+
+data <- data |> mutate( AGM14= ifelse(c6_a_general_meeting_status== "Yes" & days_agm <365 &
+                                        !is.na(c6_c_photo_of_the_general_meeting_minutes), 3,
+                                      ifelse(c6_a_general_meeting_status== "Yes" & days_agm >365 &
+                                               !is.na(c6_c_photo_of_the_general_meeting_minutes), 2,
+                                             ifelse(c6_a_general_meeting_status== "No",0,0))))
+
+
+data |> pull(AGM14) |> unique()
+
+#(15) Elections    
+#Compute days between two dates
+data <- data |>
+  mutate(days_elections = as.Date(today) - as.Date(c8_b_elections_date)) |>
+  mutate (days_elections= as.numeric(days_elections))
+y <- data |> select(today,c8_b_elections_date)
+
+
+data <- data |> mutate( Elections15= case_when(c8_a_elections_status== "Yes" & days_elections <=365 &
+                                                 !is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "Yes"~3,
+                                               c8_a_elections_status== "Yes" & days_elections >365 &
+                                                 !is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "Yes" ~2,
+                                               c8_a_elections_status== "Yes" & days_elections <=365 &
+                                                 is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "Yes"~2.5,
+                                               c8_a_elections_status== "Yes" & days_elections >365 &
+                                                 is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "Yes"~1.5,
+                                               c8_a_elections_status== "Yes" & days_elections <= 365 &
+                                                 !is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "No" ~2,
+                                               c8_a_elections_status== "Yes" & days_elections > 365 &
+                                                 !is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "No" ~1,
+                                               c8_a_elections_status== "Yes" & days_elections <= 365 &
+                                                 is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "No" ~1.5,
+                                               c8_a_elections_status== "Yes" & days_elections > 365 &
+                                                 is.na(c8_c_photo_of_the_minutes_with_the_elections_report) & 
+                                                 c8_d_one_thirds_rotation_rule == "No" ~0.5,
+                                               TRUE ~0))
+
+data|> pull(Elections15)|> unique()
+
+
+#(16) Budget Status  (current approved budget and evidence)  
+
+
+data<- data |> mutate(Budget16 = ifelse(c9_a_budget_status=="Yes" & c9_b_what_is_the_approval_status_for_the_budget=="Budget is Approved" &
+                                          is.na(c9_c_photo_of_the_approved_budget),2,
+                                        ifelse(c9_a_budget_status=="Yes" & 
+                                                 c9_b_what_is_the_approval_status_for_the_budget=="Budget is NOT Approved",1,
+                                               ifelse(!is.na(c9_c_photo_of_the_approved_budget) & c9_a_budget_status=="Yes" & 
+                                                        c9_b_what_is_the_approval_status_for_the_budget=="Budget is Approved"
+                                                      ,3,0))))
+
+
+data|>pull(Budget16) |> unique()
+
+#(17)  Wealth Declaration and Indemnity 
+
+
+data<- data |> mutate(WealthIndemnty17 = ifelse(c11_a_wealth_declaration_forms=="Filled and Filed" & c12_a_indemnity_forms=="Filled and Filed",3,
+                                                ifelse(c11_a_wealth_declaration_forms=="Not Filled" & c12_a_indemnity_forms=="Not Filled",0, 
+                                                       ifelse(c11_a_wealth_declaration_forms=="Not Filled" & c12_a_indemnity_forms=="Filled and Filed",1,
+                                                              ifelse(c11_a_wealth_declaration_forms=="Not Filled" & c12_a_indemnity_forms=="Filled",0.5,
+                                                                     ifelse(c11_a_wealth_declaration_forms=="Filled and Filed" & c12_a_indemnity_forms=="Filled" ,2,
+                                                                            ifelse(c11_a_wealth_declaration_forms=="Filled and Filed" & c12_a_indemnity_forms=="Not Filled",1,
+                                                                                   ifelse(c11_a_wealth_declaration_forms=="Filled" & c12_a_indemnity_forms=="Not Filled",0.5,
+                                                                                          ifelse(c11_a_wealth_declaration_forms=="Filled" & c12_a_indemnity_forms=="Filled",2,
+                                                                                                 ifelse(c11_a_wealth_declaration_forms=="Filled" & c12_a_indemnity_forms=="Filled and Filed",2,0))))))))))
+
+data|>pull(WealthIndemnty17) |> unique()
+
+
+
+#(18) Audit Status
+
+
+data<- data |> mutate(AuditStatus18 = ifelse(is.na(c7_b_audit_status),0,
+                                             ifelse(c7_b_audit_status=="Books are still at the Auditor",1,
+                                                    ifelse(c7_b_audit_status=="Audited but not Registered",1,
+                                                           ifelse(c7_b_audit_status=="Audited and Registered",2,
+                                                                  ifelse(c7_b_audit_status=="Audited, Registered and Approved in an AGM",3,0))))))
+
+data|>pull(AuditStatus18) |> unique()
+
+
+#(19) Tax Returns & Tax Compliance Certificate
+
+
+data<- data |> mutate(TaxReturns19 = ifelse(c13_a_tax_returns=="Yes" & c14_a_does_the_org_type_name_have_a_valid_current_tax_compliance_certificate =="Yes" &
+                                              !is.na(c14_b_photo_of_the_tax_compliance_certificate),3,
+                                            ifelse(c13_a_tax_returns=="Yes" &  c14_a_does_the_org_type_name_have_a_valid_current_tax_compliance_certificate =="Yes" &
+                                                     is.na(c14_b_photo_of_the_tax_compliance_certificate),2,
+                                                   ifelse(c13_a_tax_returns=="Yes" & c14_a_does_the_org_type_name_have_a_valid_current_tax_compliance_certificate == "No",1,
+                                                          ifelse(c13_a_tax_returns=="No" & c14_a_does_the_org_type_name_have_a_valid_current_tax_compliance_certificate == "Yes",1      
+                                                                 ,0)))))
+
+data|>pull(TaxReturns19) |> unique()
+
+
+#PLANNING & CAPACITY
+#(20)  SACCO Policies
+data$c10_a_approved_policies_human_resource_policy <- as.numeric(data$c10_a_approved_policies_human_resource_policy)
+data<- data |> rowwise() |>  mutate(SumPolicies= sum( c10_a_approved_policies_credit_policy,
+                                                      c10_a_approved_policies_human_resource_policy,
+                                                      c10_a_approved_policies_finance_procurement_policy,na.rm = T))
+
+
+
+data<- data |> mutate(Policies20 = ifelse(SumPolicies==0,0,
+                                          ifelse(SumPolicies==1,1,
+                                                 ifelse(SumPolicies==2,2,
+                                                        ifelse(SumPolicies==3,3,NA)))))
+data|>pull(Policies20) |> unique()
+
+
+#(21)  No of  Plans 
+data$d1_which_of_the_following_plans_planning_tools_does_the_org_type_name_have_enterprise_development_plan_edp <- as.numeric(data$d1_which_of_the_following_plans_planning_tools_does_the_org_type_name_have_enterprise_development_plan_edp)
+
+data<- data |> rowwise() |> mutate(SumPlans= sum( d1_which_of_the_following_plans_planning_tools_does_the_org_type_name_have_strategic_plan,
+                                                  d1_which_of_the_following_plans_planning_tools_does_the_org_type_name_have_enterprise_development_plan_edp,
+                                                  d1_which_of_the_following_plans_planning_tools_does_the_org_type_name_have_business_plan,
+                                                  d1_which_of_the_following_plans_planning_tools_does_the_org_type_name_have_annual_workplan))
+
+
+data<- data |> mutate(Plans21 = ifelse(SumPlans==0,0,
+                                       ifelse(SumPlans==1,1,
+                                              ifelse(SumPlans==2,2,
+                                                     ifelse(SumPlans >=3,3,NA)))))
+
+data <- data |> mutate(SumPlans =ifelse(is.na(SumPlans), 0, SumPlans))
+
+data|>pull(Plans21) |> unique()
+
+#(22) Implementation Status of Plans
+data<- data |> rowwise() |> mutate(SumPlanStatusImplem= sum(d3_what_is_the_implementation_status_of_this_plan_prepared,
+                                                            d3_what_is_the_implementation_status_of_this_plan_approved ,
+                                                            d3_what_is_the_implementation_status_of_this_plan_funded ,
+                                                            d3_what_is_the_implementation_status_of_this_plan_under_implementation,
+                                                            d3_what_is_the_implementation_status_of_this_plan_completed,na.rm = T))
+
+
+data <- data |> mutate(SumPlanStatusImplem =ifelse(is.na(SumPlanStatusImplem), 0, SumPlanStatusImplem))
+data<- data |> mutate(PlansImpleme22 = ifelse(SumPlanStatusImplem==0,0,
+                                              ifelse(SumPlanStatusImplem==1,1,
+                                                     ifelse(SumPlanStatusImplem==2,2,
+                                                            ifelse(SumPlanStatusImplem >=3,3,NA)))))
+
+data |> pull(PlansImpleme22) |> unique()
+
+####HUMAN RESOURCE
+
+#(23) Staffing Positions
+
+data<- data |> rowwise() |> mutate(SumPositions= sum(e1_within_your_org_type_name_which_of_the_following_positions_are_covered_accountant,
+                                                     e1_within_your_org_type_name_which_of_the_following_positions_are_covered_bookkeeper ,
+                                                     e1_within_your_org_type_name_which_of_the_following_positions_are_covered_marketing_officer ,
+                                                     e1_within_your_org_type_name_which_of_the_following_positions_are_covered_ict_officer,na.rm =T)) |>
+  mutate(Positions23= ifelse(SumPositions==0,0,
+                             ifelse(SumPositions==1,1,
+                                    ifelse(SumPositions==2,2,
+                                           ifelse(SumPositions >= 3 & e1_within_your_org_type_name_which_of_the_following_positions_are_covered_bookkeeper==1,3,
+                                                  2)))))
+
+
+data |> pull(Positions23) |> unique()
+
+
+
+#(24)  % of Total employees who are Permanent employees
+data<- data |> mutate(PermanentEmpl= 100*(e2_d_among_all_the_workers_you_have_in_this_org_type_name_which_of_the_following_categories_are_represented_permanent_employee/
+                                            e2_a_how_many_workers_does_this_orgnization_have)) |>
+  
+  mutate (PermEmployees24 = ifelse(PermanentEmpl==0,0,
+                                   ifelse(PermanentEmpl >0 & PermanentEmpl <= 25,1,
+                                          ifelse(PermanentEmpl > 25 & PermanentEmpl <= 50,2,
+                                                 ifelse(PermanentEmpl>50,3,0))))) |>
+  mutate(PermEmployees24 =ifelse(is.na(PermEmployees24), 0, PermEmployees24))
+
+
+data |> pull(PermEmployees24) |> unique()
+
+
+#25) %Growth in share capital in the last 2 years  
+data <- data |> mutate (ShareGrowthPerc =((h4_d_current_total_value_of_shares-h3_d_total_value_of_shares_for_2021)/h3_d_total_value_of_shares_for_2021)*100)
+data<- data |> mutate(ShareGrowth25= ifelse(is.na(ShareGrowthPerc),0,
+                                            ifelse(ShareGrowthPerc==0,0,
+                                                   ifelse(ShareGrowthPerc>0 & 
+                                                            ShareGrowthPerc <=5,1,
+                                                          ifelse(ShareGrowthPerc>5 & 
+                                                                   ShareGrowthPerc <=10,2,
+                                                                 ifelse(ShareGrowthPerc>10,3,0))))))
+data |> pull(ShareGrowth25) |> unique()
+
+#26)  Growth in savings in the last 2 years
+
+data <- data |> mutate (ShareSavingsPerc =((g5_b_total_deposits_in_the_last_12_months_in_kenyan_shillings-g2_d_total_deposits_in_2021)/g2_d_total_deposits_in_2021)*100)
+data<- data |> mutate(ShareSavings26= ifelse(is.na(ShareSavingsPerc),0,
+                                             ifelse(ShareSavingsPerc==0,0,
+                                                    ifelse(ShareSavingsPerc>0 & 
+                                                             ShareSavingsPerc <=5,1,
+                                                           ifelse(ShareSavingsPerc>5 & 
+                                                                    ShareSavingsPerc <=10,2,
+                                                                  ifelse(ShareSavingsPerc>10,3,0))))))
+
+data |> pull(ShareSavings26) |> unique()
+
+
+#27)  27) Loan portfolio at Risk (PAR) 
+
+data <-data |> mutate(g7_what_percentage_of_loans_are_delinquent= ifelse(g7_what_percentage_of_loans_are_delinquent> 100,
+                                                                         (g7_what_percentage_of_loans_are_delinquent/g5_total_loan_portfolio)*100,
+                                                                         g7_what_percentage_of_loans_are_delinquent)) |>
+  mutate(g7_what_percentage_of_loans_are_delinquent= ifelse(g7_what_percentage_of_loans_are_delinquent>100,100,
+                                                            g7_what_percentage_of_loans_are_delinquent))
+data<- data |> mutate(LoansPAR27= ifelse(is.na(g7_what_percentage_of_loans_are_delinquent),0,
+                                         ifelse(g7_what_percentage_of_loans_are_delinquent==0,3,
+                                                ifelse(g7_what_percentage_of_loans_are_delinquent>0 & 
+                                                         g7_what_percentage_of_loans_are_delinquent <=5,1,
+                                                       ifelse(g7_what_percentage_of_loans_are_delinquent>5 & 
+                                                                g7_what_percentage_of_loans_are_delinquent <=10,2,
+                                                              ifelse(g7_what_percentage_of_loans_are_delinquent>10,3,NA))))))
+
+
+#28)  percentage Loan portfolio  in the last 12 months
+
+data <- data |> mutate (LoanPortfolPerc =((g5_total_loan_portfolio-g5_a_total_loans_in_the_last_12_months_in_kenyan_shillings)/g5_total_loan_portfolio)*100)
+data<- data |> mutate(LoanPortfol28= ifelse(is.na(LoanPortfolPerc),0,
+                                            ifelse(LoanPortfolPerc==0,0,
+                                                   ifelse(LoanPortfolPerc>0 & 
+                                                            LoanPortfolPerc <=49,1,
+                                                          ifelse(LoanPortfolPerc>49 & 
+                                                                   LoanPortfolPerc <=80,2,
+                                                                 ifelse(LoanPortfolPerc>80,3,0))))))
+data |> pull(LoanPortfol28)|> unique()
+
+
+#29)   % of loans that are Agricultural loans
+
+data<- data |> mutate(AgriLoansPerc=(g6_total_amount_given_as_agricultural_loans_in_the_last_12_months_in_kenyan_shillings/
+                                       g5_a_total_loans_in_the_last_12_months_in_kenyan_shillings )*100) |>
+  mutate(AgriLoansPerc== ifelse(AgriLoansPerc> 100 ,100,AgriLoansPerc))
+
+data<- data |> mutate(AgriLoans29= ifelse(is.na(AgriLoansPerc),0,
+                                          ifelse(AgriLoansPerc==0,0,
+                                                 ifelse(AgriLoansPerc>0 & 
+                                                          AgriLoansPerc <=50,1,
+                                                        ifelse(AgriLoansPerc>50 & 
+                                                                 AgriLoansPerc <=80,2,
+                                                               ifelse(AgriLoansPerc>80,3,0))))))
+
+data |> pull(AgriLoans29) |> unique()
+
+#30) Surplus/Loss position
+
+data<- data |> mutate(SurplusLoss30= ifelse(is.na(h4_c_2023_operations_surplus_deficit_note_amount),0,
+                                            ifelse(is.na(h3_g_2022_operations_surplus_deficit_note_2022_amount) & h4_c_2023_operations_surplus_deficit_note_amount >0,1,
+                                                   ifelse(is.na(h3_g_2022_operations_surplus_deficit_note_2022_amount) & h4_c_2023_operations_surplus_deficit_note_amount ==0,0,
+                                                          ifelse(h4_b_surplus_loss== "Surplus" &
+                                                                   h4_c_2023_operations_surplus_deficit_note_amount> h3_g_2022_operations_surplus_deficit_note_2022_amount,3,
+                                                                 ifelse(h4_b_surplus_loss== "Surplus" &
+                                                                          h4_c_2023_operations_surplus_deficit_note_amount < h3_g_2022_operations_surplus_deficit_note_2022_amount,1,
+                                                                        ifelse(h4_b_surplus_loss== "Surplus" &
+                                                                                 h4_c_2023_operations_surplus_deficit_note_amount == h3_g_2022_operations_surplus_deficit_note_2022_amount,2,
+                                                                               1)))))))
+
+data |> pull(SurplusLoss30)|> unique()
+
+
+#AUTOMATION
+#32) Physical office  
+
+
+data <- data |> mutate(Office32 = ifelse(is.na(k5_is_the_office_owned_or_rented_by_the_organization),0,
+                                         ifelse(k5_is_the_office_owned_or_rented_by_the_organization== "Shared / Housed",1,
+                                                ifelse(k5_is_the_office_owned_or_rented_by_the_organization=="Rented",2,
+                                                       ifelse(k5_is_the_office_owned_or_rented_by_the_organization=="Owned",3,4)))))
+data |> pull(Office32) |> unique()
+
+
+#33) Access to Electricity/solar/generator power
+
+data <- data %>% 
+  rowwise() %>% 
+  mutate(SumPowerSource = sum(k6_what_is_source_of_power_at_this_office_mains_electricity_kplc,
+                              k6_what_is_source_of_power_at_this_office_solar,
+                              k6_what_is_source_of_power_at_this_office_generator_diesel_generator, na.rm=TRUE)) 
+
+
+data<- data |> mutate(SourcePower33= ifelse(is.na(SumPowerSource),0,
+                                            ifelse(SumPowerSource==1,1,
+                                                   ifelse(SumPowerSource==2,2,
+                                                          ifelse(SumPowerSource==3,3,0)))))
+
+#(34) Internet connectivity 
+
+
+data <- data %>% 
+  rowwise() %>% 
+  mutate(SumInternet = sum(k7_b_what_type_of_internet_connection_do_you_have_fibre ,
+                           k7_b_what_type_of_internet_connection_do_you_have_cable,
+                           k7_b_what_type_of_internet_connection_do_you_have_mobile ,
+                           k7_b_what_type_of_internet_connection_do_you_have_wifi,
+                           k7_b_what_type_of_internet_connection_do_you_have_other,na.rm = T))
+
+data<- data |> mutate(Internet34= ifelse(is.na(SumInternet),0,
+                                         ifelse(SumInternet==1,1,
+                                                ifelse(SumInternet==2,2,
+                                                       ifelse(SumInternet==3,3,0)))))
+
+
+data |> pull(Internet34) |> unique()
+
+#(35) Existence of MIS and human capacity to operate 
+
+data <-data |> mutate( MIS35= ifelse(k13_does_the_organization_have_an_existing_management_information_systems_mis== "Yes" &
+                                       k8_how_many_employees_officials_are_computer_literate >=1,3 ,
+                                     ifelse(k13_does_the_organization_have_an_existing_management_information_systems_mis== "Yes" &
+                                              k8_how_many_employees_officials_are_computer_literate ==0,1,
+                                            ifelse(k13_does_the_organization_have_an_existing_management_information_systems_mis== "No" &
+                                                     k8_how_many_employees_officials_are_computer_literate ==0,0,
+                                                   ifelse(k13_does_the_organization_have_an_existing_management_information_systems_mis== "No" &
+                                                            k8_how_many_employees_officials_are_computer_literate >=1,1,NA)))))
+
+
+data |> pull(MIS35) |> unique()  
+
+#(36)  ICT equipment
+
+data <-data |>rowwise() |> mutate ( SumICT = sum (k11_how_many_printers_photocopiers_does_the_organization_have,
+                                                  k10_how_many_laptop_and_desktop_computers_does_the_organization_have,na.rm = T))
+
+data |> pull(SumICT) |> unique()
+
+
+data<- data |> mutate(ICT36= ifelse(SumICT == 0,0,
+                                    ifelse(SumICT==1,1,
+                                           ifelse(SumICT==2,2,
+                                                  ifelse(SumICT >=3,3,NA)))))
+data |> pull(ICT36) |> unique()
+
+
+
+
+
+#########GRAND SCORE
+
+data <- data |> rowwise()|> mutate( Background_score=sum(BackgroundInd1 ,BackgroudBond2,Activities3,na.rm = T),
+                                    Membership_score= sum(MembershipTotal4,GenderDissa5,YouthsInd6,CIG.VMGInd7,CIG_VMGInd8,na.rm = T),
+                                    Governance_score =sum(GenderMCM10,YouthsInd10,GenderSC11,YouthsInd12,SubcommiteesInd13,
+                                                          AGM14,Elections15,Budget16,WealthIndemnty17,AuditStatus18,TaxReturns19,na.rm = T),
+                                    Planning.Capacity_score= sum(Policies20,Plans21,PlansImpleme22, na.rm = T),
+                                    HumanResource_score= sum(Positions23,PermEmployees24,na.rm = T),
+                                    FinanciaPerfomance_score=sum(ShareGrowth25,ShareSavings26,LoansPAR27,LoanPortfol28,AgriLoans29,SurplusLoss30,na.rm = T),
+                                    Automation_score=sum(Office32,SourcePower33,Internet34,MIS35,ICT36,na.rm = T))
+
+
+data <-data |> mutate (GrandScore=((Background_score/9)*0.05) +((Membership_score/15)*0.15) + ((Governance_score/33)*0.23) +
+                         ((Planning.Capacity_score/9)*0.12) +((HumanResource_score/6)*0.15) + ((FinanciaPerfomance_score/18)*0.2)+
+                         ((Automation_score/15)*0.1))
+
+
+
+
+
+data <-data |> mutate(BackgroundInd1=(Background_score/9)*100,
+                      MembershipInd2= (Membership_score/15)*100,
+                      GovernanceInd3 =(Governance_score/33)*100,
+                      PlanningCapacityInd4 = (Planning.Capacity_score/9)*100,
+                      HumanResourceInd5 = (HumanResource_score/6)*100,
+                      FinancialPerformanceInd6 = (FinanciaPerfomance_score/18)*100,
+                      AutomationInd7 =(Automation_score/15)*100,
+                      TotalScore = GrandScore*100)
+
+
+data <-data |> mutate (Grade= ifelse(TotalScore>=75,"A",
+                                     ifelse(TotalScore >=50 & TotalScore < 75, "B",
+                                            ifelse(TotalScore >=25 & TotalScore < 50, "C",
+                                                   ifelse(TotalScore<25,"D",NA)))))
+
+data2 <- data |>  select(sub_county,ward,a1_name_of_the_org_type_name,other_org_type_name_name,type_of_org_type_name,
+                         what_is_the_registration_status_of_this_organization,registration_number_number,
+                         wardcoverage,b5_a_ward_coverage,BackgroundInd1,MembershipInd2,GovernanceInd3,
+                         PlanningCapacityInd4,HumanResourceInd5,FinancialPerformanceInd6,AutomationInd7,
+                         TotalScore,Grade)
+
+
+data2<- data2|> mutate(a1_name_of_the_org_type_name= ifelse(a1_name_of_the_org_type_name=="Other",other_org_type_name_name,a1_name_of_the_org_type_name))
+data2$other_org_type_name_name<-NULL
+
+data2 <- data2 %>% mutate_at(9:16, round, 1)
+
+data2 <- data2|> group_by(ward) %>%
+  arrange(desc(TotalScore), .by_group = TRUE)
+
+data2 <- rename(data2,"Background"="BackgroundInd1")
+data2 <- rename(data2,"Membership"="MembershipInd2")
+data2 <- rename(data2,"Governance"="GovernanceInd3")
+data2 <- rename(data2,"PlanningCapacity"="PlanningCapacityInd4")
+data2 <- rename(data2,"HumanResource"="HumanResourceInd5")
+data2 <- rename(data2,"FinancialPerformance"="FinancialPerformanceInd6")
+data2 <- rename(data2,"Automation"="AutomationInd7")
+data2 <- rename(data2,"Name of SACCO"="a1_name_of_the_org_type_name")
+data2 <- rename(data2,"Name of wards covered"="b5_a_ward_coverage")
+data2 <- rename(data2,"Number of wards covered"="wardcoverage")
+data2 <- rename(data2,"Subcounty"="sub_county")
+data2 <- rename(data2,"Ward"="ward")
+data2 <- rename(data2,"Reg.number"="registration_number_number")
+data2 <- rename(data2,"Reg.status"="what_is_the_registration_status_of_this_organization")
+data2 <- rename(data2,"Type"="type_of_org_type_name")
+
+expss::xl_write_file(data2, filename = "KiambuGradedSACCOs.xlsx")
+write.csv(data2,"KiambuGradedSACCOs.csv")
+
